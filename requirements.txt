@@ -2,4 +2,6 @@ librosa
 soundfile
 numpy
 pandas
-tensorflow
+keras
+scikit-learn
+matplotlib
