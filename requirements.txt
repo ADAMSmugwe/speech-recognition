@@ -5,3 +5,4 @@ pandas
 keras
 scikit-learn
 matplotlib
+tqdm
