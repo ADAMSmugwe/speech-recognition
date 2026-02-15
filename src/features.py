@@ -1,4 +1,4 @@
-"""
+56543456"""
 Feature extraction utilities for audio processing.
 """
 
@@ -11,6 +11,28 @@ from tqdm import tqdm
 SAMPLE_RATE = 22050
 DURATION = 3
 N_MFCC = 40
+
+
+def add_noise(data, noise_factor=0.005):
+    """Add random Gaussian noise to audio data."""
+    noise = np.random.randn(len(data))
+    return data + noise_factor * noise
+
+
+def shift(data, shift_max=0.2):
+    """Randomly shift audio data."""
+    shift_amount = int(np.random.uniform(-shift_max, shift_max) * len(data))
+    return np.roll(data, shift_amount)
+
+
+def stretch(data, rate=0.8):
+    """Time stretch audio data."""
+    return librosa.effects.time_stretch(data, rate=rate)
+
+
+def pitch(data, sr, n_steps=2):
+    """Pitch shift audio data."""
+    return librosa.effects.pitch_shift(data, sr=sr, n_steps=n_steps)
 
 
 def extract_mfcc(file_path, sr=SAMPLE_RATE, duration=DURATION, n_mfcc=N_MFCC):
@@ -43,13 +65,24 @@ def extract_mfcc(file_path, sr=SAMPLE_RATE, duration=DURATION, n_mfcc=N_MFCC):
         return None
 
 
-def process_dataset(df, output_dir='data/processed/'):
+def extract_mfcc_from_audio(audio, sr=SAMPLE_RATE, n_mfcc=N_MFCC):
+    """Extract MFCC features from raw audio data."""
+    try:
+        mfcc = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=n_mfcc)
+        return mfcc
+    except Exception as e:
+        print(f"Error extracting MFCC: {e}")
+        return None
+
+
+def process_dataset(df, output_dir='data/processed/', augment=True):
     """
     Process all audio files in the DataFrame and save features.
     
     Args:
         df: DataFrame with 'path' and 'emotion' columns
         output_dir: Directory to save processed features
+        augment: Whether to include augmented versions
     """
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -57,14 +90,37 @@ def process_dataset(df, output_dir='data/processed/'):
     features = []
     labels = []
     
-    print(f"Processing {len(df)} audio files...")
+    total_samples = len(df) * (2 if augment else 1)
+    print(f"Processing {len(df)} audio files (with augmentation: {total_samples} total samples)...")
     
-    for _, row in tqdm(df.iterrows(), total=len(df), desc="Extracting MFCCs"):
-        mfcc = extract_mfcc(row['path'])
-        
-        if mfcc is not None:
-            features.append(mfcc)
-            labels.append(row['emotion'])
+    with tqdm(total=total_samples, desc="Extracting MFCCs") as pbar:
+        for _, row in df.iterrows():
+            try:
+                audio, _ = librosa.load(row['path'], sr=SAMPLE_RATE, duration=DURATION)
+                
+                max_len = SAMPLE_RATE * DURATION
+                if len(audio) < max_len:
+                    audio = np.pad(audio, (0, max_len - len(audio)), mode='constant')
+                else:
+                    audio = audio[:max_len]
+                
+                mfcc_original = extract_mfcc_from_audio(audio)
+                if mfcc_original is not None:
+                    features.append(mfcc_original)
+                    labels.append(row['emotion'])
+                    pbar.update(1)
+                
+                if augment:
+                    audio_noisy = add_noise(audio)
+                    mfcc_augmented = extract_mfcc_from_audio(audio_noisy)
+                    if mfcc_augmented is not None:
+                        features.append(mfcc_augmented)
+                        labels.append(row['emotion'])
+                        pbar.update(1)
+                        
+            except Exception as e:
+                print(f"\nError processing {row['path']}: {e}")
+                continue
     
     features = np.array(features)
     labels = np.array(labels)
