@@ -24,3 +24,8 @@ ENV/
 
 # OS
 .DS_Store
+
+# Model files
+models/*.h5
+models/*.pkl
+!models/.gitkeep
